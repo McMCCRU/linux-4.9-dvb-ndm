@@ -1,0 +1,67 @@
+config UBRIDGE
+	tristate "Simplified Ethernet Bridge"
+	depends on BRIDGE
+	default y
+
+config FAST_NAT
+	bool "Fast NAT support"
+	depends on NETFILTER
+	default y
+
+config FAST_NAT_V2
+	bool "netfilter fastpath PPTP/L2TP/ESP, fastroute TCP/UDP"
+	depends on NETFILTER
+	depends on FAST_NAT
+	default y
+
+config NTCE_MODULE
+	tristate "NTCE module support"
+	default y
+
+config NAT_CONE
+	bool "Netfilter Full-Cone/Restricted-Cone NAT mode support for UDP"
+	depends on NETFILTER
+	default n
+	---help---
+	  This Netfilter option must be enabled to support Cone NAT mode instead linux hybrid NAT.
+	  sysctl -w net.nf_conntrack_nat_mode=0/1/2(Linux/FullCone/RestrictedCone).
+	  sysctl -w net.nf_conntrack_nat_cone_ifindex
+	  This is processed UDP traffic for direct SIP/uTP and others complex UDP based protocol via NAT.
+
+config NETFILTER_FP_SMB
+	bool "Netfilter fastpath to speedup SMB traffic (skip NF handlers)"
+	depends on NETFILTER
+	default n
+
+config NETFILTER_XT_TARGET_PPE
+	tristate '"PPE" ppe disabling target support'
+	depends on IP_NF_MANGLE || IP6_NF_MANGLE
+	depends on NETFILTER_ADVANCED
+	---help---
+	  This option adds the "PPE" target to disable fastnat/hwnat
+	  offloading for ct
+
+config NETFILTER_XT_NDMMARK
+	tristate 'ndmmark target and match support'
+	depends on NETFILTER_XTABLES
+	default m if NETFILTER_ADVANCED=n
+
+config NETFILTER_XT_CONNNDMMARK
+	tristate 'ctndmmark target and match support'
+	depends on NF_CONNTRACK
+	depends on NETFILTER_XTABLES
+	depends on NETFILTER_ADVANCED
+	select NF_CONNTRACK_MARK
+
+config NETFILTER_XT_MATCH_CONNSKIP
+	tristate '"connskip" match support'
+	depends on NETFILTER_ADVANCED
+	---help---
+	  This option adds a "connskip" match.
+
+config NETFILTER_XT_MATCH_TLS
+	tristate '"tls" match support'
+	depends on NETFILTER_ADVANCED
+	select GLOB
+	---help---
+	  This option adds a "tls" match.
