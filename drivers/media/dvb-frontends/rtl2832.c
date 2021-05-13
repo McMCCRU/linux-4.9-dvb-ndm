@@ -498,7 +498,7 @@ static int rtl2832_set_frontend(struct dvb_frontend *fe)
 	* RSAMP_RATIO = floor(CrystalFreqHz * 7 * pow(2, 22)
 	*	/ ConstWithBandwidthMode)
 	*/
-	num = dev->pdata->clk * 7;
+	num = dev->pdata->clk * 7ULL;
 	num *= 0x400000;
 	num = div_u64(num, bw_mode);
 	resamp_ratio =  num & 0x3ffffff;
@@ -511,7 +511,7 @@ static int rtl2832_set_frontend(struct dvb_frontend *fe)
 	*	/ (CrystalFreqHz * 7))
 	*/
 	num = bw_mode << 20;
-	num2 = dev->pdata->clk * 7;
+	num2 = dev->pdata->clk * 7ULL;
 	num = div_u64(num, num2);
 	num = -num;
 	cfreq_off_ratio = num & 0xfffff;
@@ -534,18 +534,11 @@ err:
 	return ret;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
 static int rtl2832_get_frontend(struct dvb_frontend *fe,
 				struct dtv_frontend_properties *c)
-#else
-static int rtl2832_get_frontend(struct dvb_frontend *fe)
-#endif
 {
 	struct rtl2832_dev *dev = fe->demodulator_priv;
 	struct i2c_client *client = dev->client;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 5, 0)
-	struct dtv_frontend_properties *c = &fe->dtv_property_cache;
-#endif
 	int ret;
 	u8 buf[3];
 
@@ -800,6 +793,7 @@ static int rtl2832_read_ber(struct dvb_frontend *fe, u32 *ber)
  * is delayed here a little bit in order to see if there is sequence of I2C
  * messages sent to same I2C bus.
  */
+#if 0
 static void rtl2832_i2c_gate_work(struct work_struct *work)
 {
 	struct rtl2832_dev *dev = container_of(work, struct rtl2832_dev, i2c_gate_work.work);
@@ -815,21 +809,16 @@ static void rtl2832_i2c_gate_work(struct work_struct *work)
 err:
 	dev_dbg(&client->dev, "failed=%d\n", ret);
 }
+#endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
 static int rtl2832_select(struct i2c_mux_core *muxc, u32 chan_id)
 {
 	struct rtl2832_dev *dev = i2c_mux_priv(muxc);
-#else
-static int rtl2832_select(struct i2c_adapter *adap, void *mux_priv, u32 chan_id)
-{
-	struct rtl2832_dev *dev = mux_priv;
-#endif
 	struct i2c_client *client = dev->client;
 	int ret;
 
 	/* terminate possible gate closing */
-	cancel_delayed_work(&dev->i2c_gate_work);
+	//cancel_delayed_work(&dev->i2c_gate_work);
 
 	/* open gate */
 	ret = regmap_update_bits(dev->regmap, 0x101, 0x08, 0x08);
@@ -842,26 +831,23 @@ err:
 	return ret;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
+#if 0
 static int rtl2832_deselect(struct i2c_mux_core *muxc, u32 chan_id)
 {
 	struct rtl2832_dev *dev = i2c_mux_priv(muxc);
-#else
-static int rtl2832_deselect(struct i2c_adapter *adap, void *mux_priv, u32 chan_id)
-{
-	struct rtl2832_dev *dev = mux_priv;
-#endif
+
 	schedule_delayed_work(&dev->i2c_gate_work, usecs_to_jiffies(100));
 	return 0;
 }
+#endif
 
 static const struct dvb_frontend_ops rtl2832_ops = {
 	.delsys = { SYS_DVBT },
 	.info = {
 		.name = "Realtek RTL2832 (DVB-T)",
-		.frequency_min	  = 174000000,
-		.frequency_max	  = 862000000,
-		.frequency_stepsize = 166667,
+		.frequency_min	= 174000000,
+		.frequency_max	= 862000000,
+		.frequency_stepsize	= 166667,
 		.caps = FE_CAN_FEC_1_2 |
 			FE_CAN_FEC_2_3 |
 			FE_CAN_FEC_3_4 |
@@ -921,11 +907,7 @@ static struct i2c_adapter *rtl2832_get_i2c_adapter(struct i2c_client *client)
 	struct rtl2832_dev *dev = i2c_get_clientdata(client);
 
 	dev_dbg(&client->dev, "\n");
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
 	return dev->muxc->adapter[0];
-#else
-	return dev->i2c_adapter_tuner;
-#endif
 }
 
 static int rtl2832_slave_ts_ctrl(struct i2c_client *client, bool enable)
@@ -1055,119 +1037,6 @@ err:
 	return ret;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 5, 0)
-/*
- * We implement own I2C access routines for regmap in order to get manual access
- * to I2C adapter lock, which is needed for I2C mux adapter.
- */
-static int rtl2832_regmap_read(void *context, const void *reg_buf,
-			       size_t reg_size, void *val_buf, size_t val_size)
-{
-	struct i2c_client *client = context;
-	int ret;
-	struct i2c_msg msg[2] = {
-		{
-			.addr = client->addr,
-			.flags = 0,
-			.len = reg_size,
-			.buf = (u8 *)reg_buf,
-		}, {
-			.addr = client->addr,
-			.flags = I2C_M_RD,
-			.len = val_size,
-			.buf = val_buf,
-		}
-	};
-
-	ret = __i2c_transfer(client->adapter, msg, 2);
-	if (ret != 2) {
-		dev_warn(&client->dev, "i2c reg read failed %d\n", ret);
-		if (ret >= 0)
-			ret = -EREMOTEIO;
-		return ret;
-	}
-	return 0;
-}
-
-static int rtl2832_regmap_write(void *context, const void *data, size_t count)
-{
-	struct i2c_client *client = context;
-	int ret;
-	struct i2c_msg msg[1] = {
-		{
-			.addr = client->addr,
-			.flags = 0,
-			.len = count,
-			.buf = (u8 *)data,
-		}
-	};
-
-	ret = __i2c_transfer(client->adapter, msg, 1);
-	if (ret != 1) {
-		dev_warn(&client->dev, "i2c reg write failed %d\n", ret);
-		if (ret >= 0)
-			ret = -EREMOTEIO;
-		return ret;
-	}
-	return 0;
-}
-
-static int rtl2832_regmap_gather_write(void *context, const void *reg,
-				       size_t reg_len, const void *val,
-				       size_t val_len)
-{
-	struct i2c_client *client = context;
-	int ret;
-	u8 buf[256];
-	struct i2c_msg msg[1] = {
-		{
-			.addr = client->addr,
-			.flags = 0,
-			.len = 1 + val_len,
-			.buf = buf,
-		}
-	};
-
-	buf[0] = *(u8 const *)reg;
-	memcpy(&buf[1], val, val_len);
-
-	ret = __i2c_transfer(client->adapter, msg, 1);
-	if (ret != 1) {
-		dev_warn(&client->dev, "i2c reg write failed %d\n", ret);
-		if (ret >= 0)
-			ret = -EREMOTEIO;
-		return ret;
-	}
-	return 0;
-}
-
-/*
- * FIXME: Hack. Implement own regmap locking in order to silence lockdep
- * recursive lock warning. That happens when regmap I2C client calls I2C mux
- * adapter, which leads demod I2C repeater enable via demod regmap. Operation
- * takes two regmap locks recursively - but those are different regmap instances
- * in a two different I2C drivers, so it is not deadlock. Proper fix is to make
- * regmap aware of lockdep.
- */
-static void rtl2832_regmap_lock(void *__dev)
-{
-	struct rtl2832_dev *dev = __dev;
-	struct i2c_client *client = dev->client;
-
-	dev_dbg(&client->dev, "\n");
-	mutex_lock(&dev->regmap_mutex);
-}
-
-static void rtl2832_regmap_unlock(void *__dev)
-{
-	struct rtl2832_dev *dev = __dev;
-	struct i2c_client *client = dev->client;
-
-	dev_dbg(&client->dev, "\n");
-	mutex_unlock(&dev->regmap_mutex);
-}
-#endif
-
 static int rtl2832_probe(struct i2c_client *client,
 		const struct i2c_device_id *id)
 {
@@ -1176,14 +1045,6 @@ static int rtl2832_probe(struct i2c_client *client,
 	struct rtl2832_dev *dev;
 	int ret;
 	u8 tmp;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 5, 0)
-	static const struct regmap_bus regmap_bus = {
-		.read = rtl2832_regmap_read,
-		.write = rtl2832_regmap_write,
-		.gather_write = rtl2832_regmap_gather_write,
-		.val_format_endian_default = REGMAP_ENDIAN_NATIVE,
-	};
-#endif
 	static const struct regmap_range_cfg regmap_range_cfg[] = {
 		{
 			.selector_reg     = 0x00,
@@ -1210,14 +1071,8 @@ static int rtl2832_probe(struct i2c_client *client,
 	dev->client = client;
 	dev->pdata = client->dev.platform_data;
 	dev->sleeping = true;
-	INIT_DELAYED_WORK(&dev->i2c_gate_work, rtl2832_i2c_gate_work);
+	//INIT_DELAYED_WORK(&dev->i2c_gate_work, rtl2832_i2c_gate_work);
 	/* create regmap */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 5, 0)
-	mutex_init(&dev->regmap_mutex);
-	dev->regmap_config.lock = rtl2832_regmap_lock,
-	dev->regmap_config.unlock = rtl2832_regmap_unlock,
-	dev->regmap_config.lock_arg = dev,
-#endif
 	dev->regmap_config.reg_bits =  8,
 	dev->regmap_config.val_bits =  8,
 	dev->regmap_config.volatile_reg = rtl2832_volatile_reg,
@@ -1225,12 +1080,7 @@ static int rtl2832_probe(struct i2c_client *client,
 	dev->regmap_config.ranges = regmap_range_cfg,
 	dev->regmap_config.num_ranges = ARRAY_SIZE(regmap_range_cfg),
 	dev->regmap_config.cache_type = REGCACHE_NONE,
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
 	dev->regmap = regmap_init_i2c(client, &dev->regmap_config);
-#else
-	dev->regmap = regmap_init(&client->dev, &regmap_bus, client,
-				  &dev->regmap_config);
-#endif
 	if (IS_ERR(dev->regmap)) {
 		ret = PTR_ERR(dev->regmap);
 		goto err_kfree;
@@ -1242,9 +1092,8 @@ static int rtl2832_probe(struct i2c_client *client,
 		goto err_regmap_exit;
 
 	/* create muxed i2c adapter for demod tuner bus */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
-	dev->muxc = i2c_mux_alloc(i2c, &i2c->dev, 1, 0, I2C_MUX_LOCKED,
-				  rtl2832_select, rtl2832_deselect);
+	dev->muxc = i2c_mux_alloc(i2c, &i2c->dev, 1, 0, 0 /* I2C_MUX_LOCKED */,
+				  rtl2832_select, NULL /*rtl2832_deselect*/);
 	if (!dev->muxc) {
 		ret = -ENOMEM;
 		goto err_regmap_exit;
@@ -1253,14 +1102,6 @@ static int rtl2832_probe(struct i2c_client *client,
 	ret = i2c_mux_add_adapter(dev->muxc, 0, 0, 0);
 	if (ret)
 		goto err_regmap_exit;
-#else
-	dev->i2c_adapter_tuner = i2c_add_mux_adapter(i2c, &i2c->dev, dev,
-			0, 0, 0, rtl2832_select, rtl2832_deselect);
-	if (dev->i2c_adapter_tuner == NULL) {
-		ret = -ENODEV;
-		goto err_regmap_exit;
-	}
-#endif
 
 	/* create dvb_frontend */
 	memcpy(&dev->fe.ops, &rtl2832_ops, sizeof(struct dvb_frontend_ops));
@@ -1291,13 +1132,10 @@ static int rtl2832_remove(struct i2c_client *client)
 
 	dev_dbg(&client->dev, "\n");
 
-	cancel_delayed_work_sync(&dev->i2c_gate_work);
+	//cancel_delayed_work_sync(&dev->i2c_gate_work);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
 	i2c_mux_del_adapters(dev->muxc);
-#else
-	i2c_del_mux_adapter(dev->i2c_adapter_tuner);
-#endif
+
 	regmap_exit(dev->regmap);
 
 	kfree(dev);
@@ -1314,9 +1152,7 @@ MODULE_DEVICE_TABLE(i2c, rtl2832_id_table);
 static struct i2c_driver rtl2832_driver = {
 	.driver = {
 		.name	= "rtl2832",
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 5, 0)
 		.suppress_bind_attrs	= true,
-#endif
 	},
 	.probe		= rtl2832_probe,
 	.remove		= rtl2832_remove,

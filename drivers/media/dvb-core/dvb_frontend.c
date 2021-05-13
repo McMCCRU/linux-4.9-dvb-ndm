@@ -643,6 +643,7 @@ static int dvb_frontend_thread(void *data)
 	fepriv->wakeup = 0;
 	fepriv->reinitialise = 0;
 
+	flush_scheduled_work();
 	dvb_frontend_init(fe);
 
 	set_freezable();
@@ -830,10 +831,7 @@ static int dvb_frontend_start(struct dvb_frontend *fe)
 {
 	int ret;
 	struct dvb_frontend_private *fepriv = fe->frontend_priv;
-	struct task_struct *fe_thread = NULL;
-#if 1
-	int cpu = 0;
-#endif
+	struct task_struct *fe_thread;
 
 	dev_dbg(fe->dvb->device, "%s:\n", __func__);
 
@@ -854,13 +852,8 @@ static int dvb_frontend_start(struct dvb_frontend *fe)
 	fepriv->thread = NULL;
 	mb();
 
-#if 1
-	fe_thread = kthread_create_on_node(dvb_frontend_thread, fe,
-		cpu_to_node(cpu), "kdvb-ad-%i-fe-%i", fe->dvb->num, fe->id);
-#else
 	fe_thread = kthread_run(dvb_frontend_thread, fe,
-		"kdvb-ad-%i-fe-%i", fe->dvb->num, fe->id);
-#endif
+		"kdvb-ad-%i-fe-%i", fe->dvb->num,fe->id);
 	if (IS_ERR(fe_thread)) {
 		ret = PTR_ERR(fe_thread);
 		dev_warn(fe->dvb->device,
@@ -869,10 +862,6 @@ static int dvb_frontend_start(struct dvb_frontend *fe)
 		up(&fepriv->sem);
 		return ret;
 	}
-#if 1
-	kthread_bind(fe_thread, cpu);
-	wake_up_process(fe_thread);
-#endif
 	fepriv->thread = fe_thread;
 	return 0;
 }
