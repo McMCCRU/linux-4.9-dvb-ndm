@@ -242,7 +242,12 @@ struct page_frag {
 #endif
 };
 
+#ifdef CONFIG_X86_64
 #define PAGE_FRAG_CACHE_MAX_SIZE	__ALIGN_MASK(32768, ~PAGE_MASK)
+#else
+/* override frag cache to 8192 bytes for embedded */
+#define PAGE_FRAG_CACHE_MAX_SIZE	__ALIGN_MASK(8192, ~PAGE_MASK)
+#endif
 #define PAGE_FRAG_CACHE_MAX_ORDER	get_order(PAGE_FRAG_CACHE_MAX_SIZE)
 
 struct page_frag_cache {
@@ -261,6 +266,11 @@ struct page_frag_cache {
 };
 
 typedef unsigned long vm_flags_t;
+
+static inline atomic_t *compound_mapcount_ptr(struct page *page)
+{
+	return &page[1].compound_mapcount;
+}
 
 /*
  * A region containing a mapping of a non-memory backed file under NOMMU

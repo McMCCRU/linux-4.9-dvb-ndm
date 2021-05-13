@@ -18,6 +18,10 @@ config MT7613_APCLI_SUPPORT
 	bool "AP-Client support"
 	default y
 
+config MT7613_APCLI_ROAM_SUPPORT
+	bool "AP-Client Roam support"
+	default y
+
 config MT7613_APCLI_CERT_SUPPORT
 	bool "AP-Client TGN Cert support"
 	depends on MT7613_APCLI_SUPPORT
@@ -57,6 +61,10 @@ config MT7613_MBO_SUPPORT
 	select MT7613_DOT11U_GAS_SUPPORT
 	default n
 
+config MT7613_OCE_SUPPORT
+	bool "Optimized Connectivity Experience support"
+	default n
+
 config MT7613_MAP_SUPPORT
 	bool "Multi-AP Support"
 	default y
@@ -81,6 +89,10 @@ config MT7613_OWE_SUPPORT
 	bool "Enhanced OPEN(OWE) auth support"
 	depends on MT7613_WPA3_SUPPORT
 	default y
+
+config MT7613_DSCP_PRI_SUPPORT
+	bool "DSCP Priority Mapping support"
+	default n
 
 config MT7613_BAND_STEERING
 	bool "Band Steering support"

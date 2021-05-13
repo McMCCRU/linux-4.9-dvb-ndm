@@ -766,6 +766,9 @@ struct sk_buff {
 #ifdef CONFIG_NETFILTER_FP_SMB
 	__u8			nf_fp_cache:1;
 #endif
+#if IS_ENABLED(CONFIG_FAST_NAT)
+	__u8			swnat_ka_mark:1;
+#endif
 	/* 1, 2, 4 or 5 bit hole */
 
 #ifdef CONFIG_NET_SCHED
@@ -799,7 +802,8 @@ struct sk_buff {
 
 #if IS_ENABLED(CONFIG_NETFILTER_XT_NDMMARK)
 	__u8			ndm_mark;
-	/* 24 bit hole */
+	__u8			ndm_mark_kernel;
+	/* 16 bit hole */
 #endif
 
 	union {
@@ -1197,7 +1201,8 @@ static inline __u32 skb_get_hash_flowi4(struct sk_buff *skb, const struct flowi4
 	return skb->hash;
 }
 
-__u32 skb_get_hash_perturb(const struct sk_buff *skb, u32 perturb);
+__u32 skb_get_hash_perturb(const struct sk_buff *skb,
+			   const siphash_key_t *perturb);
 
 static inline __u32 skb_get_hash_raw(const struct sk_buff *skb)
 {
@@ -1570,6 +1575,18 @@ static inline __u32 skb_queue_len(const struct sk_buff_head *list_)
 }
 
 /**
+ *	skb_queue_len_lockless	- get queue length
+ *	@list_: list to measure
+ *
+ *	Return the length of an &sk_buff queue.
+ *	This variant can be used in lockless contexts.
+ */
+static inline __u32 skb_queue_len_lockless(const struct sk_buff_head *list_)
+{
+	return READ_ONCE(list_->qlen);
+}
+
+/**
  *	__skb_queue_head_init - initialize non-spinlock portions of sk_buff_head
  *	@list: queue to initialize
  *
@@ -1772,7 +1789,7 @@ static inline void __skb_unlink(struct sk_buff *skb, struct sk_buff_head *list)
 {
 	struct sk_buff *next, *prev;
 
-	list->qlen--;
+	WRITE_ONCE(list->qlen, list->qlen - 1);
 	next	   = skb->next;
 	prev	   = skb->prev;
 	skb->next  = skb->prev = NULL;
@@ -2329,10 +2346,10 @@ static inline int pskb_network_may_pull(struct sk_buff *skb, unsigned int len)
  * NET_IP_ALIGN(2) + ethernet_header(14) + IP_header(20/40) + ports(8)
  */
 #ifndef NET_SKB_PAD
-#ifdef CONFIG_64BIT
-#define NET_SKB_PAD		128
+#if L1_CACHE_BYTES >= 64
+#define NET_SKB_PAD		max(128, L1_CACHE_BYTES)
 #else
-#define NET_SKB_PAD		96
+#define NET_SKB_PAD		max(96, L1_CACHE_BYTES)
 #endif
 #define NET_SKB_PAD_ORIG	max(32, L1_CACHE_BYTES)
 #endif
@@ -2472,7 +2489,7 @@ struct sk_buff *__netdev_alloc_skb(struct net_device *dev, unsigned int length,
 static inline struct sk_buff *netdev_alloc_skb(struct net_device *dev,
 					       unsigned int length)
 {
-	return __netdev_alloc_skb(dev, length, GFP_ATOMIC);
+	return __netdev_alloc_skb(dev, length, GFP_ATOMIC | __GFP_NOWARN);
 }
 
 /* legacy helper around __netdev_alloc_skb() */
@@ -2502,7 +2519,7 @@ static inline struct sk_buff *__netdev_alloc_skb_ip_align(struct net_device *dev
 static inline struct sk_buff *netdev_alloc_skb_ip_align(struct net_device *dev,
 		unsigned int length)
 {
-	return __netdev_alloc_skb_ip_align(dev, length, GFP_ATOMIC);
+	return __netdev_alloc_skb_ip_align(dev, length, GFP_ATOMIC | __GFP_NOWARN);
 }
 
 static inline void skb_free_frag(void *addr)
@@ -2516,7 +2533,7 @@ struct sk_buff *__napi_alloc_skb(struct napi_struct *napi,
 static inline struct sk_buff *napi_alloc_skb(struct napi_struct *napi,
 					     unsigned int length)
 {
-	return __napi_alloc_skb(napi, length, GFP_ATOMIC);
+	return __napi_alloc_skb(napi, length, GFP_ATOMIC | __GFP_NOWARN);
 }
 void napi_consume_skb(struct sk_buff *skb, int budget);
 
@@ -2825,7 +2842,7 @@ static inline int skb_padto(struct sk_buff *skb, unsigned int len)
  *	is untouched. Otherwise it is extended. Returns zero on
  *	success. The skb is freed on error.
  */
-static inline int skb_put_padto(struct sk_buff *skb, unsigned int len)
+static inline int __must_check skb_put_padto(struct sk_buff *skb, unsigned int len)
 {
 	unsigned int size = skb->len;
 

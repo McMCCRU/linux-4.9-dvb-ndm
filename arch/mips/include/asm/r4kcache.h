@@ -66,9 +66,11 @@ static inline void flush_scache_line_indexed(unsigned long addr)
 static inline void flush_icache_line(unsigned long addr)
 {
 	switch (boot_cpu_type()) {
+#if defined(CONFIG_CPU_LOONGSON2)
 	case CPU_LOONGSON2:
 		cache_op(Hit_Invalidate_I_Loongson2, addr);
 		break;
+#endif
 
 	default:
 		cache_op(Hit_Invalidate_I, addr);
@@ -129,9 +131,11 @@ static inline void flush_scache_line(unsigned long addr)
 static inline void protected_flush_icache_line(unsigned long addr)
 {
 	switch (boot_cpu_type()) {
+#if defined(CONFIG_CPU_LOONGSON2)
 	case CPU_LOONGSON2:
 		protected_cache_op(Hit_Invalidate_I_Loongson2, addr);
 		break;
+#endif
 
 	default:
 #ifdef CONFIG_EVA
@@ -599,14 +603,46 @@ static inline void prot##extra##blast_##pfx##cache##_range(unsigned long start, 
 						    unsigned long end)	\
 {									\
 	unsigned long lsize = cpu_##desc##_line_size();			\
+	unsigned long lsize_2 = lsize * 2;				\
+	unsigned long lsize_3 = lsize * 3;				\
+	unsigned long lsize_4 = lsize * 4;				\
+	unsigned long lsize_5 = lsize * 5;				\
+	unsigned long lsize_6 = lsize * 6;				\
+	unsigned long lsize_7 = lsize * 7;				\
+	unsigned long lsize_8 = lsize * 8;				\
 	unsigned long addr = start & ~(lsize - 1);			\
-	unsigned long aend = (end - 1) & ~(lsize - 1);			\
+	unsigned long aend = (end + lsize - 1) & ~(lsize - 1);		\
+	int lines = (aend - addr) / lsize;				\
 									\
-	while (1) {							\
+	while (lines >= 8) {						\
 		prot##cache_op(hitop, addr);				\
-		if (addr == aend)					\
-			break;						\
-		addr += lsize;						\
+		prot##cache_op(hitop, addr + lsize);			\
+		prot##cache_op(hitop, addr + lsize_2);			\
+		prot##cache_op(hitop, addr + lsize_3);			\
+		prot##cache_op(hitop, addr + lsize_4);			\
+		prot##cache_op(hitop, addr + lsize_5);			\
+		prot##cache_op(hitop, addr + lsize_6);			\
+		prot##cache_op(hitop, addr + lsize_7);			\
+		addr += lsize_8;					\
+		lines -= 8;						\
+	}								\
+									\
+	if (lines & 0x4) {						\
+		prot##cache_op(hitop, addr);				\
+		prot##cache_op(hitop, addr + lsize);			\
+		prot##cache_op(hitop, addr + lsize_2);			\
+		prot##cache_op(hitop, addr + lsize_3);			\
+		addr += lsize_4;					\
+	}								\
+									\
+	if (lines & 0x2) {						\
+		prot##cache_op(hitop, addr);				\
+		prot##cache_op(hitop, addr + lsize);			\
+		addr += lsize_2;					\
+	}								\
+									\
+	if (lines & 0x1) {						\
+		prot##cache_op(hitop, addr);				\
 	}								\
 }
 

@@ -16,6 +16,7 @@ config FAST_NAT_V2
 
 config NTCE_MODULE
 	tristate "NTCE module support"
+	depends on NF_CONNTRACK_CUSTOM > 0
 	default y
 
 config NAT_CONE
@@ -65,3 +66,9 @@ config NETFILTER_XT_MATCH_TLS
 	select GLOB
 	---help---
 	  This option adds a "tls" match.
+
+config NF_CT_PROTO_ESP
+	tristate 'ESP protocol connection tracking support'
+	depends on NETFILTER_ADVANCED
+	default m
+

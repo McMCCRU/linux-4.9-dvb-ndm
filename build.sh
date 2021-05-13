@@ -39,6 +39,7 @@ preinstall_dvb_drivers() {
 	mkdir -p ./modules-$XCPU/4.9`cat localversion-ndm`/kernel-4.9
 	mv -f ./modules-$XCPU/lib/modules/4.9`cat localversion-ndm`/kernel/drivers ./modules-$XCPU/4.9`cat localversion-ndm`/kernel-4.9/drivers
 	rm -rf ./modules-$XCPU/4.9`cat localversion-ndm`/kernel-4.9/drivers/hid
+	rm -rf ./modules-$XCPU/4.9`cat localversion-ndm`/kernel-4.9/drivers/mtd
 	rm -f ./modules-$XCPU/4.9`cat localversion-ndm`/kernel-4.9/drivers/input/evdev.ko
 	mv -f ./modules-$XCPU/4.9`cat localversion-ndm`/kernel-4.9/drivers/media/compat.ko ./modules-$XCPU/4.9`cat localversion-ndm`/kernel-4.9/
 	ln -sf /lib/modules/4.9`cat localversion-ndm` ./modules-$XCPU/4.9`cat localversion-ndm`/kernel

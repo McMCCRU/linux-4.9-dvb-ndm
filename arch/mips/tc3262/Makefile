@@ -7,8 +7,8 @@ else
 obj-y += irq.o
 endif
 
+obj-$(CONFIG_TC3262_CPU_TIMER) += hpt.o
 obj-$(CONFIG_PCI) += pci_en75xx.o
-obj-$(CONFIG_RALINK_TIMER_WDG) += rt_timer_wdg.o
 obj-$(CONFIG_MIPS_CMP) += malta-amon.o
 
 ifdef CONFIG_MIPS_MT_SMP
@@ -17,4 +17,10 @@ endif
 
 ifdef CONFIG_USB_XHCI_MTK
 obj-y += dev-xhci.o uphy.o
+endif
+
+ifneq ($(strip \
+	$(CONFIG_MT7615_WHNAT_SUPPORT) \
+	$(CONFIG_MT7915_WHNAT_SUPPORT)),)
+obj-y += dev-woe.o
 endif
